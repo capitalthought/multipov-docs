@@ -9,6 +9,20 @@ multipov.ai exposes its review, rewrite, and persona surface as a [Model Context
 
 ---
 
+## Quick install (recommended)
+
+If you just want it working in Claude Code in one command, use the [`multipov-mcp-server`](https://www.npmjs.com/package/multipov-mcp-server) npm package:
+
+```bash
+claude mcp add multipov npx -y multipov-mcp-server --env MULTIPOV_API_KEY=mpov_live_YOUR_TOKEN_HERE
+```
+
+That's it. No clone, no build, no service-role keys, no Supabase config. `npx` downloads the package on first run, and Claude Code spawns it over stdio. The package is a thin proxy that forwards every tool call to `https://multipov.ai/mcp` with your bearer token — no business logic runs locally.
+
+Source: [capitalthought/multipov-mcp-server](https://github.com/capitalthought/multipov-mcp-server). Keep reading for the direct HTTP transport, other clients, and the full tool reference.
+
+---
+
 ## 1. Get an API key
 
 1. Log into [multipov.ai](https://multipov.ai).
@@ -22,13 +36,12 @@ API keys carry your full account permissions. Treat a leaked key the same as a l
 
 ## 2. Add the server to your MCP client
 
-### Claude Code
+### Claude Code — via the npm package (recommended)
 
-Claude Code defaults to **stdio** transport. You must pass `--transport http` or the connection will fail silently.
+The simplest path. Works with every version of Claude Code and doesn't depend on streamable-HTTP transport support:
 
 ```bash
-claude mcp add --transport http multipov https://multipov.ai/mcp \
-  --header "Authorization: Bearer mpov_live_YOUR_TOKEN_HERE"
+claude mcp add multipov npx -y multipov-mcp-server --env MULTIPOV_API_KEY=mpov_live_YOUR_TOKEN_HERE
 ```
 
 Verify:
@@ -38,7 +51,38 @@ claude mcp list
 # multipov: connected
 ```
 
+The [`multipov-mcp-server`](https://www.npmjs.com/package/multipov-mcp-server) npm package is a ~150-line stdio-to-HTTP proxy that speaks MCP over stdio locally and forwards every request to `https://multipov.ai/mcp`. Source at [capitalthought/multipov-mcp-server](https://github.com/capitalthought/multipov-mcp-server).
+
+### Claude Code — direct HTTP transport (alternative)
+
+If your Claude Code version supports streamable-HTTP transport, you can skip the proxy package entirely and connect directly:
+
+```bash
+claude mcp add --transport http multipov https://multipov.ai/mcp \
+  --header "Authorization: Bearer mpov_live_YOUR_TOKEN_HERE"
+```
+
 In any Claude Code session, `/mcp` lists the tools, or just ask directly: "use multipov to review this diff with 5 engineers."
+
+### Claude Desktop
+
+Claude Desktop uses stdio transport exclusively — use the npm package. Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or the equivalent on your OS:
+
+```json
+{
+  "mcpServers": {
+    "multipov": {
+      "command": "npx",
+      "args": ["-y", "multipov-mcp-server"],
+      "env": {
+        "MULTIPOV_API_KEY": "mpov_live_YOUR_TOKEN_HERE"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop. The tools appear under the MCP picker in the composer.
 
 ### Cursor
 
