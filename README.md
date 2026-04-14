@@ -177,12 +177,36 @@ API keys are stored as **SHA-256 hashes** server-side. The plaintext is shown ex
 
 ---
 
-## 10. Claude Code users — `/prep-multipov` skill
+## 10. Claude Code users — skills
 
-If you use [Claude Code](https://claude.com/claude-code), the [`skills/prep-multipov.md`](./skills/prep-multipov.md) skill automates the install + health-check flow above:
+If you use [Claude Code](https://claude.com/claude-code), the skills in [`skills/`](./skills/) are opinionated, ready-to-drop-in slash commands that wrap the multipov MCP tools with sensible defaults, progress bars, and post-review triage.
 
-1. Save it to `~/.claude/skills/prep-multipov/SKILL.md`
-2. Run `/prep-multipov` in any Claude Code session
-3. It checks whether the MCP server is registered, prompts for your API key if missing, registers it, and verifies the connection
+### Install
 
-It's a shell-based skill that relies on the `MULTIPOV_API_KEY` environment variable or your preferred secrets manager — adapt as needed for other MCP clients.
+Save any skill file as `~/.claude/skills/<name>/SKILL.md` (one directory per skill). After installing, Claude Code exposes the skill as a slash command.
+
+### Setup
+
+| Skill | Slash command | What it does |
+|-------|---------------|--------------|
+| [`prep-multipov.md`](./skills/prep-multipov.md) | `/prep-multipov` | Verifies the multipov MCP server is registered and responsive. Prompts for an API key on first run and registers the server. Run this once per machine before using any of the review skills below. |
+
+### Code review skills
+
+All of the review skills below call the multipov MCP server's code-review tools (`submit_plan_review`, `submit_pipeline_review`, `submit_codebase_review`). They handle diff capture, progress bar rendering, consensus-first report formatting, and fix-first triage. Each has its own opinionated post-review workflow.
+
+| Skill | Slash command | When to use it |
+|-------|---------------|----------------|
+| [`review-plan.md`](./skills/review-plan.md) | `/review-plan <path>` | **Before writing code.** Pressure-test a design doc against a content-routed 8-person panel. Architecture, correctness, missing requirements, failure modes. Highest-leverage review in the pipeline — blockers caught here cost minutes; the same thing caught after implementation costs hours. |
+| [`review-pipeline.md`](./skills/review-pipeline.md) | `/review-pipeline [diff-range]` | **On a PR-sized diff.** General code review on the current branch (or any diff range). Auto-fixes mechanical issues, batches everything else into one question. Default lens — start here for most reviews. |
+| [`review-all.md`](./skills/review-all.md) | `/review-all [path-or-glob]` | **On a whole module or repo.** Comprehensive codebase review. Flags both immediate issues AND systemic patterns (tech debt, design erosion, inconsistency across modules). Run monthly or before any public launch. |
+| [`review-security.md`](./skills/review-security.md) | `/review-security [diff-range]` | **Security-focused.** Auth, injection, XSS/CSRF, SSRF, secrets, supply chain, rate limiting. Hard-stops on critical findings before processing lower-severity items. Run before any auth change, any public launch, any new AI integration, or any dependency bump. |
+| [`review-performance.md`](./skills/review-performance.md) | `/review-performance [diff-range]` | **Performance-focused.** User-perceived speed and runtime cost: latency, cold start, allocation pressure, rendering cost, bundle size, caching, DB queries. Recommends profiling before fixing anything non-trivial. |
+| [`review-scaling.md`](./skills/review-scaling.md) | `/review-scaling [diff-range]` | **Scaling-focused.** Throughput, memory pressure, DB connection pooling, cache stampedes, capacity planning, backpressure. Every finding calls out the scale trigger. Pair with `/review-performance` for a one-two punch. |
+| [`review-tests.md`](./skills/review-tests.md) | `/review-tests [path-or-glob]` | **Test-quality focused.** Pressure-tests your tests — missing assertions, uncovered paths, over-mocking, flaky risks, weak coverage. Does NOT auto-fix (rewriting a test can mask the bug it was catching). |
+
+All code-review skills share the same daily review quota (10/day) and work against the same 8-person content-routed panel — the difference is the `custom_instructions` framing passed to the server. You can adapt any of them as starting points for your own custom review lenses.
+
+### Skills for other MCP clients
+
+These are Claude Code slash commands, but the underlying logic (call `submit_*_review`, poll with `wait_seconds=20`, fetch the report, triage) is portable to any MCP client. Adapt the shell/markdown framing as needed for Cursor, Codex, Zed, or your own harness.
