@@ -232,12 +232,6 @@ echo "Review: https://multipov.ai/review/${REVIEW_ID}"
 
 ---
 
-## Fallback to local pipeline (emergency only)
-
-If multipov.ai is down and you need a plan review NOW, the old local implementation is archived at `~/icloud/Claude/commands-archive/review-plan-local.md`. Copy it to `~/icloud/Claude/commands/multipov-plan.md` temporarily. Do NOT leave it swapped in — the MCP version is the canonical flow. Restore this file from git / iCloud once multipov is back up.
-
----
-
 ## Tips
 
 - **Don't pass `personas`** unless you explicitly want to override the content-aware panel — you lose the 5+3 engineering-vs-outside-perspective split that makes plan review useful.
@@ -251,7 +245,7 @@ If multipov.ai is down and you need a plan review NOW, the old local implementat
 
 ## Migration note (2026-04-13)
 
-This skill was rewritten to call the multipov.ai MCP server instead of dispatching local reviewer subagents. It migrated alongside `/multipov-code` on the same day. The old local implementation is preserved at `~/icloud/Claude/commands-archive/review-plan-local.md` as a break-glass fallback. Same rationale as the pipeline migration:
+This skill was rewritten to call the multipov.ai MCP server instead of dispatching local reviewer subagents. It migrated alongside `/multipov-code` on the same day. Same rationale as the pipeline migration:
 1. A consistent reviewer pool across machines
 2. Cost observability via multipov's shared daily cap
 3. An audit trail in `list_my_reviews`
