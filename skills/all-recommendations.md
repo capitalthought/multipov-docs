@@ -24,9 +24,9 @@ Unlike the `/review-*` skills, this skill does **not** call the multipov MCP ser
 You run this **after** a review has already produced findings. Typical flow:
 
 ```
-/review-pipeline          → produces a consensus-first report
+/multipov-code          → produces a consensus-first report
 /all-recommendations      → implements everything that isn't a false positive
-/review-pipeline          → (optional) verifies the fixes didn't introduce regressions
+/multipov-code          → (optional) verifies the fixes didn't introduce regressions
 ```
 
 ---
@@ -35,7 +35,7 @@ You run this **after** a review has already produced findings. Typical flow:
 
 - A recent review whose findings you want to implement. Either:
   - A review report file you pass as `$ARGUMENTS`, or
-  - Findings already present in the current Claude Code conversation (from a prior `/review-pipeline`, `/review-plan`, `/review-all`, or similar).
+  - Findings already present in the current Claude Code conversation (from a prior `/multipov-code`, `/multipov-plan`, `/multipov-all`, or similar).
 - A clean working tree — or at least a commit point you can roll back to. This skill modifies files.
 - A working build command so the verification step can tell you whether the changes compile.
 
@@ -48,7 +48,7 @@ You run this **after** a review has already produced findings. Typical flow:
 Collect all findings from the review output. Sources (checked in order):
 
 1. **`$ARGUMENTS`** — if a file path is provided, read the review report from that file.
-2. **Current conversation** — if no path given, look for the most recent review output in this conversation (from `/review-all`, `/review-pipeline`, `/review-plan`, or similar).
+2. **Current conversation** — if no path given, look for the most recent review output in this conversation (from `/multipov-all`, `/multipov-code`, `/multipov-plan`, or similar).
 3. **Abort** — if no findings can be located, tell the user to run a review first.
 
 Parse all findings into a structured list. Each finding should have:
@@ -237,17 +237,17 @@ Present the final implementation report:
 - **Test failures:** offer to investigate and fix.
 - **Skipped risky items:** suggest manual review.
 - **Conflicts:** present both sides and ask the user to decide.
-- **All clean:** suggest running `/review-pipeline` or `/review-all` again to verify the fixes, then committing.
+- **All clean:** suggest running `/multipov-code` or `/multipov-all` again to verify the fixes, then committing.
 
 ---
 
 ## Tips
 
-- This skill is designed to run **after** a review (`/review-pipeline`, `/review-plan`, `/review-all`, `/review-security`, etc.).
+- This skill is designed to run **after** a review (`/multipov-code`, `/multipov-plan`, `/multipov-all`, `/multipov-security`, etc.).
 - Unlike most workflows that only fix Critical/High, this implements all severity levels including Medium and Low.
 - The ~50% false-positive rate means roughly half the findings will be skipped — this is normal and expected on well-maintained codebases. If your false-positive rate is much higher or lower, it's usually a sign you need to adjust the review framing, not the implementation step.
 - Each agent validates findings before implementing, so you won't get blindly applied bad fixes.
-- If the review was on a design doc (from `/review-plan`), findings may not have specific file/line references — agents will need to locate the relevant code themselves.
+- If the review was on a design doc (from `/multipov-plan`), findings may not have specific file/line references — agents will need to locate the relevant code themselves.
 - For very large reviews (50+ findings), consider running in waves and reviewing intermediate results before proceeding to the next wave.
 - Always verify with a build after implementation — agent changes can interact in unexpected ways, especially when two files import from each other and both got edited in the same run.
 
@@ -255,5 +255,5 @@ Present the final implementation report:
 
 ## References
 
-- `/review-pipeline`, `/review-plan`, `/review-all`, `/review-security`, `/review-performance`, `/review-scaling`, `/review-tests` — the review skills that produce findings this skill consumes.
+- `/multipov-code`, `/multipov-plan`, `/multipov-all`, `/multipov-security`, `/multipov-performance`, `/multipov-scaling`, `/multipov-tests` — the review skills that produce findings this skill consumes.
 - Issues and suggestions: [capitalthought/multipov-docs](https://github.com/capitalthought/multipov-docs/issues).
