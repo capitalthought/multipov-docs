@@ -118,7 +118,7 @@ Any client that supports MCP over HTTP works. The server URL is `https://multipo
 
 ## 3. What you can do
 
-14 tools across four groups:
+17 tools across five groups:
 
 **Personas** — browse the persona catalog, fetch a single persona, or ask the server to recommend a panel for a given document.
 
@@ -129,6 +129,8 @@ Any client that supports MCP over HTTP works. The server URL is `https://multipo
 **Code reviews** — engineering-focused variants: `submit_plan_review` (design doc / implementation plan before you write code), `submit_pipeline_review` (PR-sized diff), `submit_codebase_review` (entire module / multi-file audit). Each uses a content-aware 8-person panel with type-specific framing.
 
 All three code-review tools accept `content` OR `file_url`, `file_name`, `mode` (`quick` | `deep`), `personas` (to override the auto-selected panel), `custom_instructions`, and `skepticism` (1–5).
+
+**Fact Check** — fact-check any document by fanning it out to GPT-4o, Gemini, and Grok in parallel. Only flags claims when ≥2 models agree AND a source URL is present, which keeps the signal rate around 30–50% instead of the 60–70% false-positive rate you'd get from raw multi-model output. Best for strategic-research deep-dives, briefings, board memos, and anywhere a wrong claim is expensive. Three tools: `submit_fact_check` (accepts `document`, `known_corrections` for pre-applied fixes surfaced as "CONFIRMING", `whitelist` for false-positive substrings, `consensus_threshold` default 2, `require_source_url` default true), `get_fact_check_status`, and `get_fact_check_result`.
 
 ---
 
@@ -148,6 +150,14 @@ Or, for a code review:
 > use multipov's submit_pipeline_review to review my current branch diff against main.
 ```
 
+Or, for a fact check:
+
+```
+> use multipov to fact-check this strategic research deep-dive on US defense innovation orgs.
+```
+
+Claude will call `submit_fact_check`, poll `get_fact_check_status`, and fetch `get_fact_check_result`. The report ranks confirmed errors first (≥2 models agree AND a source URL is present), then notes (single-model or unsourced), then any "CONFIRMING" hits against pre-applied corrections you passed in.
+
 ---
 
 ## 5. Rate limits & cost
@@ -161,8 +171,9 @@ The MCP surface **shares the same daily quota as the web UI** — there is no se
 | Deep-mode reviews per day (global) | 5       |
 | Rewrites per day                   | 10      |
 | Concurrent rewrites                | 3       |
+| Fact checks per day                | TBD     |
 
-Quick mode uses Claude only. Deep mode fans out to Claude + GPT-4o + Gemini + Grok for cross-model consensus. Cost is tracked server-side and returns `rate_limited` with `details.kind` when a bucket trips.
+Quick mode uses Claude only. Deep mode fans out to Claude + GPT-4o + Gemini + Grok for cross-model consensus. Fact Check fans out to GPT-4o + Gemini + Grok (3 model calls per doc, ≈ $0.05–0.10 per fact-check job). The Fact Check daily quota draws from the same review bucket until the productized version ships its own counter. Cost is tracked server-side and returns `rate_limited` with `details.kind` when a bucket trips.
 
 ---
 
@@ -196,7 +207,7 @@ Every error returns a structured JSON payload:
 
 ## 7. Privacy & data processing
 
-Submitted content is processed by **Anthropic** (Claude), **OpenAI** (GPT-4o), **Google** (Gemini), and **xAI** (Grok) in deep mode. Quick mode uses Claude only. See [multipov.ai/privacy](https://multipov.ai/privacy) for the full sub-processor list.
+Submitted content is processed by **Anthropic** (Claude), **OpenAI** (GPT-4o), **Google** (Gemini), and **xAI** (Grok) in deep mode. Quick mode uses Claude only. Fact Check fans submitted content to **OpenAI** (GPT-4o), **Google** (Gemini), and **xAI** (Grok); Claude is used for finding deduplication only, not primary fact-check inference. This matters if you have vendor restrictions on which providers can see your content. See [multipov.ai/privacy](https://multipov.ai/privacy) for the full sub-processor list.
 
 API keys are stored as **SHA-256 hashes** server-side. The plaintext is shown exactly once at creation and discarded. There is no recovery mechanism — if you lose a key, generate a new one and revoke the old.
 
@@ -242,6 +253,7 @@ All of the review skills below call the multipov MCP server's code-review tools 
 | Skill | Slash command | When to use it |
 |-------|---------------|----------------|
 | [`multipov.md`](./skills/multipov.md) | `/multipov <doc-path>` | **Any document (PDF / markdown / text).** Pitch decks, PRDs, emails, plans — multi-persona review against content-routed reviewers via a local orchestrator (review-doc-runner.ts). The only command that handles arbitrary documents. |
+| [`multipov-facts.md`](./skills/multipov-facts.md) | `/multipov-facts <doc-path>` | **Fact-check any document.** Strategic research deep-dives, briefings, board memos. Fans to GPT-4o + Gemini + Grok; flags only when ≥2 models agree AND a source URL is present. |
 | [`multipov-plan.md`](./skills/multipov-plan.md) | `/multipov-plan <path>` | **Before writing code.** Pressure-test a design doc against a content-routed 8-person panel. Architecture, correctness, missing requirements, failure modes. Highest-leverage review in the pipeline — blockers caught here cost minutes; the same thing caught after implementation costs hours. |
 | [`multipov-code.md`](./skills/multipov-code.md) | `/multipov-code [diff-range]` | **On a PR-sized diff.** General code review on the current branch (or any diff range). Auto-fixes mechanical issues, batches everything else into one question. Default lens — start here for most code reviews. |
 | [`multipov-all.md`](./skills/multipov-all.md) | `/multipov-all [path-or-glob]` | **On a whole module or repo.** Comprehensive codebase review. Flags both immediate issues AND systemic patterns (tech debt, design erosion, inconsistency across modules). Run monthly or before any public launch. |
