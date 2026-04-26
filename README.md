@@ -177,7 +177,26 @@ Quick mode uses Claude only. Deep mode fans out to Claude + GPT-4o + Gemini + Gr
 
 ---
 
-## 6. Errors
+## 6. Size bands
+
+Hard input cap is **1,000,000 characters** for `content` and for `file_url` bodies after fetch (`file_too_large` above that). Inside that ceiling, deep-mode reviews degrade in two steps as the document grows past the GPT-4o / Grok / Sonnet routing context windows. Applies to `submit_review`, `submit_plan_review`, `submit_pipeline_review`, `submit_codebase_review`. Rewrites and fact checks are not affected.
+
+| Document size            | LLMs that run (deep mode)                                          | Persona auto-selection            | Warnings on the report               |
+|--------------------------|--------------------------------------------------------------------|-----------------------------------|--------------------------------------|
+| ≤ 500,000 chars          | Claude + GPT-4o + Gemini + Grok (all 4)                            | Content-routed (LLM router)       | none                                 |
+| 500,001 – 800,000 chars  | Claude + Gemini only — GPT-4o + Grok dropped (128k context limit)  | Content-routed                    | `consensus_reduced`                  |
+| 800,001 – 1,000,000 chars| Claude + Gemini only                                                | Falls back to alphabetical         | `consensus_reduced` AND `routing_fallback` |
+| > 1,000,000 chars        | n/a — request rejected                                              | n/a                               | `file_too_large` error               |
+
+Each warning lands in the final report's `warnings` array as a structured object — `{ "code": "consensus_reduced", "message": "...", "details": { "content_chars": ..., "threshold": 500000, "llms_used": ["claude", "gemini"] } }` and similarly for `routing_fallback` with `threshold: 800000` and `selection: "alphabetical"`. The disproval panel applies the same 500KB gate (drops GPT-4o + Grok disprovers above that, runs Gemini-only).
+
+Quick mode is Claude-only by definition, so the consensus gate never fires; the routing gate still applies above 800KB when persona auto-selection would otherwise run.
+
+For the in-repo authoritative copy of these thresholds and the design rationale, see [`docs/mcp/README.md`](https://github.com/capitalthought/multipov/blob/main/docs/mcp/README.md#size-bands) in the multipov repo.
+
+---
+
+## 7. Errors
 
 Every error returns a structured JSON payload:
 
@@ -205,7 +224,7 @@ Every error returns a structured JSON payload:
 
 ---
 
-## 7. Privacy & data processing
+## 8. Privacy & data processing
 
 Submitted content is processed by **Anthropic** (Claude), **OpenAI** (GPT-4o), **Google** (Gemini), and **xAI** (Grok) in deep mode. Quick mode uses Claude only. Fact Check fans submitted content to **OpenAI** (GPT-4o), **Google** (Gemini), and **xAI** (Grok); Claude is used for finding deduplication only, not primary fact-check inference. This matters if you have vendor restrictions on which providers can see your content. See [multipov.ai/privacy](https://multipov.ai/privacy) for the full sub-processor list.
 
@@ -213,7 +232,7 @@ API keys are stored as **SHA-256 hashes** server-side. The plaintext is shown ex
 
 ---
 
-## 8. Known limitations
+## 9. Known limitations
 
 1. **Sessionless transport** → no `notifications/progress`, no `resources/subscribe`. Polling is the only progress channel. Clients should honor the `recommended_poll_interval_ms` field in status responses.
 2. **API key revocation propagates within ~60 seconds** across edge isolates due to per-isolate caching.
@@ -223,7 +242,7 @@ API keys are stored as **SHA-256 hashes** server-side. The plaintext is shown ex
 
 ---
 
-## 9. Support
+## 10. Support
 
 - **Errors:** include the `details.error_id` from any `internal_error` payload.
 - **Security:** email `security@multipov.ai` (do not file public issues for security reports).
@@ -232,7 +251,7 @@ API keys are stored as **SHA-256 hashes** server-side. The plaintext is shown ex
 
 ---
 
-## 10. Claude Code users — skills
+## 11. Claude Code users — skills
 
 If you use [Claude Code](https://claude.com/claude-code), the skills in [`skills/`](./skills/) are opinionated, ready-to-drop-in slash commands that wrap the multipov MCP tools with sensible defaults, progress bars, and post-review triage.
 
