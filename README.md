@@ -27,10 +27,10 @@ Source: [capitalthought/multipov-mcp-server](https://github.com/capitalthought/m
 
 1. Log into [multipov.ai](https://multipov.ai).
 2. Open `/settings/api-keys`.
-3. Click **Generate**.
+3. Click **Generate** — or call `create_api_key` from any connected MCP client.
 4. Copy the token (`mpov_live_...`). **It is shown once.** Store it in your password manager.
 
-API keys carry your full account permissions. Treat a leaked key the same as a leaked password — revoke it immediately at `/settings/api-keys` and generate a new one.
+API keys carry your full account permissions. Treat a leaked key the same as a leaked password — revoke it immediately at `/settings/api-keys` or via `revoke_api_key`, and generate a new one.
 
 ---
 
@@ -118,19 +118,25 @@ Any client that supports MCP over HTTP works. The server URL is `https://multipo
 
 ## 3. What you can do
 
-17 tools across five groups:
+44 tools across nine groups:
 
 **Personas** — browse the persona catalog, fetch a single persona, or ask the server to recommend a panel for a given document.
 
 **Reviews** — submit a document for multi-perspective review, poll status, fetch the synthesized report, cancel in-flight reviews, list recent reviews.
 
-**Rewrites** — rewrite a document in a chosen persona's voice. Intensity ranges from voice-only to full rewrite. Annotations explain each change.
+**Rewrites** — rewrite a document in a chosen persona's voice. Intensity ranges from voice-only to full rewrite. `cancel_rewrite` cancels an in-flight rewrite and refunds the daily counter.
 
-**Code reviews** — engineering-focused variants: `submit_plan_review` (design doc / implementation plan before you write code), `submit_pipeline_review` (PR-sized diff), `submit_codebase_review` (entire module / multi-file audit). Each uses a content-aware 8-person panel with type-specific framing.
+**Code reviews** — engineering-focused variants: `submit_plan_review` (design doc / implementation plan before you write code), `submit_pipeline_review` (PR-sized diff), `submit_codebase_review` (entire module / multi-file audit). Each uses a content-aware 8-person panel with type-specific framing. All three accept `dry_run: true` to preview the selected panel without consuming quota.
 
-All three code-review tools accept `content` OR `file_url`, `file_name`, `mode` (`quick` | `deep`), `personas` (to override the auto-selected panel), `custom_instructions`, and `skepticism` (1–5).
+**Fact Check** — fan a document out to GPT-4o + Gemini + Grok in parallel. Only flags claims when ≥2 models agree AND a source URL is present, keeping the signal rate around 30–50% vs. the 60–70% false-positive rate from raw multi-model output. Best for strategic-research deep-dives, briefings, board memos. Tool: `submit_fact_check`; uses the same `get_review_status` / `get_review_report` polling flow.
 
-**Fact Check** — fact-check any document by fanning it out to GPT-4o, Gemini, and Grok in parallel. Only flags claims when ≥2 models agree AND a source URL is present, which keeps the signal rate around 30–50% instead of the 60–70% false-positive rate you'd get from raw multi-model output. Best for strategic-research deep-dives, briefings, board memos, and anywhere a wrong claim is expensive. Three tools: `submit_fact_check` (accepts `document`, `known_corrections` for pre-applied fixes surfaced as "CONFIRMING", `whitelist` for false-positive substrings, `consensus_threshold` default 2, `require_source_url` default true), `get_fact_check_status`, and `get_fact_check_result`.
+**Knowledge base** — manage your team's knowledge base, a collection of markdown blobs injected into custom persona prompts during reviews. `add_knowledge_item` (upsert), `list_knowledge_items`, `get_knowledge_item`, `update_knowledge_item`, `delete_knowledge_item`, `link_knowledge_to_persona`, `unlink_knowledge_from_persona`.
+
+**Custom personas** — create and manage your own reviewer personas stored in your team library. They appear alongside the built-in catalog and can be used anywhere a `persona_id` is accepted. The `content` field (voice guide / rubric) is write-only — never returned to callers. `list_custom_personas`, `get_custom_persona`, `create_custom_persona`, `update_custom_persona`, `delete_custom_persona`.
+
+**Teams** — manage teams, members, and roles. `list_my_teams`, `get_team`, `create_team`, `update_team`, `add_team_member`, `remove_team_member`.
+
+**Account / API keys** — manage API keys without leaving your agent. `list_api_keys`, `create_api_key` (token shown once), `revoke_api_key`.
 
 ---
 
@@ -212,15 +218,17 @@ Every error returns a structured JSON payload:
 }
 ```
 
-| Code               | When                                                                 |
-|--------------------|----------------------------------------------------------------------|
-| `invalid_input`    | Required field missing or malformed. `details.field` names which.    |
-| `file_too_large`   | Content > 1M chars.                                                  |
-| `persona_not_found`| A persona id you passed isn't in your visible catalog.               |
-| `rate_limited`     | Hit one of the buckets above. `details.kind` says which.             |
-| `not_found`        | Unknown id, or id owned by another user (same response for both).    |
-| `job_not_complete` | You called `get_review_report` before status is `complete`.          |
-| `internal_error`   | Something unexpected. `details.error_id` correlates with server logs.|
+| Code               | When                                                                                          |
+|--------------------|-----------------------------------------------------------------------------------------------|
+| `invalid_input`    | Required field missing, malformed value, or plan limit reached (`details.kind = "plan_limit"`). `details.field` names the offending input. |
+| `file_too_large`   | Content > 1M chars.                                                                           |
+| `persona_not_found`| A persona id you passed isn't in your visible catalog. `details.invalid_ids` lists them.     |
+| `rate_limited`     | Hit one of the buckets above. `details.kind` says which.                                      |
+| `cost_cap_reached` | Server-wide daily cost ceiling hit. Rare. `details.reset_at` has the rollover.               |
+| `not_found`        | Unknown id, owned by another user, or cross-team access — all return the same error for security. |
+| `unauthorized`     | Insufficient role for the operation (e.g., non-admin trying to add a team member).           |
+| `job_not_complete` | You called `get_review_report` / `get_rewrite_result` before the job finished.               |
+| `internal_error`   | Something unexpected. `details.error_id` correlates with server logs.                        |
 
 ---
 
@@ -239,6 +247,8 @@ API keys are stored as **SHA-256 hashes** server-side. The plaintext is shown ex
 3. **No local file uploads** — pass `content` (raw text) or `file_url` (allowlisted https hosts only: Google Docs/Drive, Dropbox public links, GitHub raw, GitHub gist raw, Notion public pages).
 4. **`list_my_reviews` is capped at 100 jobs.** Older review ids are dropped from the index.
 5. **No per-key scopes yet.** A compromised key has full user-level access until revoked.
+6. **`owner` role cannot be assigned via API.** Use the web UI to transfer team ownership.
+7. **Research tools return `not_implemented_yet`.** Schema is registered; engine ships in a follow-up release.
 
 ---
 
